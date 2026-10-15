@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import sys
 from typing import Optional
 
@@ -363,6 +364,40 @@ async def setchannel_error(interaction: discord.Interaction, error: app_commands
 # ==============================================================================
 
 
+def start_health_check_server():
+    """
+    If running on Render (or any cloud host) as a Web Service, Render requires
+    binding to the port specified in the PORT environment variable.
+    This starts a lightweight background HTTP server so health checks pass.
+    """
+    port_str = os.getenv("PORT")
+    if not port_str:
+        return
+
+    try:
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        import threading
+
+        port = int(port_str)
+
+        class HealthCheckHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"Steam Sale Discord Bot is online and healthy!\n")
+
+            def log_message(self, format, *args):
+                pass  # Suppress health check logging spam
+
+        server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        logger.info(f"Health check HTTP server listening on port {port} for Render deployment.")
+    except Exception as e:
+        logger.warning(f"Could not start health check HTTP server: {e}")
+
+
 def run_bot():
     init_db()
 
@@ -390,6 +425,7 @@ def run_bot():
         )
         sys.exit(1)
 
+    start_health_check_server()
     logger.info("Starting Discord bot...")
     bot.run(DISCORD_BOT_TOKEN)
 

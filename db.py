@@ -6,12 +6,24 @@ from sqlalchemy.orm import Session, sessionmaker
 from config import DATABASE_URL
 from models import Base, GuildSetting, TrackedGame
 
+# Normalize PostgreSQL URL for SQLAlchemy / psycopg2 (e.g. Supabase postgres:// -> postgresql+psycopg2://)
+normalized_db_url = DATABASE_URL
+if normalized_db_url.startswith("postgres://"):
+    normalized_db_url = normalized_db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+elif normalized_db_url.startswith("postgresql://") and not normalized_db_url.startswith("postgresql+"):
+    normalized_db_url = normalized_db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
 # For SQLite, enable check_same_thread=False
 connect_args = {}
-if DATABASE_URL.startswith("sqlite"):
+if normalized_db_url.startswith("sqlite"):
     connect_args["check_same_thread"] = False
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args, echo=False)
+engine = create_engine(
+    normalized_db_url,
+    connect_args=connect_args,
+    pool_pre_ping=True,
+    echo=False,
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
